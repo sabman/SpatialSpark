@@ -16,7 +16,7 @@
 
 package spatialspark.main
 
-import com.vividsolutions.jts.io.{WKBReader, WKTReader}
+import com.vividsolutions.jts.io.{WKBReader, WKTReader, WKTWriter}
 import com.vividsolutions.jts.geom.Geometry
 import spatialspark.operator.SpatialOperator
 import spatialspark.partition.bsp.BinarySplitPartitionConf
@@ -26,6 +26,8 @@ import spatialspark.join.{BroadcastSpatialJoin, PartitionedSpatialJoin}
 import spatialspark.util.MBR
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.sql.Row
+import org.apache.spark.sql.SQLContext
 
 import scala.util.Try
 
@@ -71,6 +73,8 @@ object SpatialJoinApp {
     if (args.length == 0) println(usage)
     val arglist = args.toList
     type OptionMap = Map[Symbol, Any]
+
+    case class Rec(id: Long, wkt: String)
 
     def nextOption(map: OptionMap, list: List[String]): OptionMap = {
       list match {
@@ -119,6 +123,9 @@ object SpatialJoinApp {
     conf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
     conf.set("spark.kryo.registrator", "spatialspark.util.KyroRegistrator")
     val sc = new SparkContext(conf)
+    val sqlContext = new SQLContext(sc)
+    import sqlContext.implicits._
+
     val outFile = options.getOrElse('output, Nil).asInstanceOf[String]
     val rightFile = options.getOrElse('right, Nil).asInstanceOf[String]
     val rightGeometryIndex = options.getOrElse('geom_right, 0).asInstanceOf[Int]
@@ -170,9 +177,12 @@ object SpatialJoinApp {
 
     //join processing
     var matchedPairs: RDD[(Long, Long)] = sc.emptyRDD
-    if (broadcastJoin)
-      matchedPairs = BroadcastSpatialJoin(sc, leftGeometryById, rightGeometryById, joinPredicate, radius)
-    else {
+
+    if (broadcastJoin) {
+      val leftRecs = leftGeometryById.map( x => (x._1, new WKTWriter().write(x._2) ))
+      val rightRecs = rightGeometryById.map( x => (x._1, new WKTWriter().write(x._2) ))
+      matchedPairs = BroadcastSpatialJoin(sc, leftRecs.toDF(), rightRecs.toDF(), joinPredicate.asInstanceOf[scala.Enumeration$Val], radius)
+    } else {
       //get extent that covers both datasets
       val extent = extentString match {
         case "" =>

@@ -18,11 +18,15 @@ package spatialspark.join
 
 import com.vividsolutions.jts.geom.Geometry
 import com.vividsolutions.jts.index.strtree.{GeometryItemDistance, STRtree}
+import com.vividsolutions.jts.io.{WKBReader, WKTReader}
 import spatialspark.operator.SpatialOperator
 import SpatialOperator.SpatialOperator
 import org.apache.spark.SparkContext
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
+import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
+import org.apache.spark.sql.{DataFrame, Row}
+import collection.JavaConverters._
 
 
 object BroadcastSpatialJoin {
@@ -63,20 +67,26 @@ object BroadcastSpatialJoin {
     }
   }
 
-  def apply(sc: SparkContext,
-            leftGeometryWithId: RDD[(Long, Geometry)],
-            rightGeometryWithId: RDD[(Long, Geometry)],
-            joinPredicate: SpatialOperator,
+  def apply(sc: JavaSparkContext,
+            leftGeometryWithId: DataFrame,
+            rightGeometryWithId: DataFrame,
+            joinPredicate: scala.Enumeration$Val,
             radius: Double = 0): RDD[(Long, Long)] = {
     // create R-tree on right dataset
     val strtree = new STRtree()
     val rightGeometryWithIdLocal = rightGeometryWithId.collect()
     rightGeometryWithIdLocal.foreach(x => {
-      val y = x._2.getEnvelopeInternal
+      val geom = new WKTReader().read(x.get(1).asInstanceOf[String])
+      val y = geom.getEnvelopeInternal
       y.expandBy(radius)
-      strtree.insert(y, x)
+      val tupleWithGeom = (x.get(0), geom)
+      strtree.insert(y, tupleWithGeom)
     })
-    val rtreeBroadcast = sc.broadcast(strtree)
-    leftGeometryWithId.flatMap(x => queryRtree(rtreeBroadcast, x._1, x._2, joinPredicate, radius))
+    val rtreeBroadcast = sc.sc.broadcast(strtree)
+    leftGeometryWithId.flatMap(x => queryRtree(rtreeBroadcast,
+        x.get(0).asInstanceOf[Long],
+        new WKTReader().read(x.get(1).asInstanceOf[String]),
+        joinPredicate.asInstanceOf[SpatialOperator],
+        radius))
   }
 }
