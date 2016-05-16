@@ -70,7 +70,7 @@ object BroadcastSpatialJoin {
   def apply(sc: JavaSparkContext,
             leftGeometryWithId: DataFrame,
             rightGeometryWithId: DataFrame,
-            joinPredicate: scala.Enumeration$Val,
+            joinPredicate: SpatialOperator,
             radius: Double = 0): RDD[(Long, Long)] = {
     // create R-tree on right dataset
     val strtree = new STRtree()

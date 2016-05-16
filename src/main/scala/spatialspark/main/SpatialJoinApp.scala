@@ -181,7 +181,7 @@ object SpatialJoinApp {
     if (broadcastJoin) {
       val leftRecs = leftGeometryById.map( x => (x._1, new WKTWriter().write(x._2) ))
       val rightRecs = rightGeometryById.map( x => (x._1, new WKTWriter().write(x._2) ))
-      matchedPairs = BroadcastSpatialJoin(sc, leftRecs.toDF(), rightRecs.toDF(), joinPredicate.asInstanceOf[scala.Enumeration$Val], radius)
+      matchedPairs = BroadcastSpatialJoin(sc, leftRecs.toDF(), rightRecs.toDF(), joinPredicate, radius)
     } else {
       //get extent that covers both datasets
       val extent = extentString match {
