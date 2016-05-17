@@ -86,7 +86,7 @@ object BroadcastSpatialJoin {
     leftGeometryWithId.flatMap(x => queryRtree(rtreeBroadcast,
         x.get(0).asInstanceOf[Long],
         new WKTReader().read(x.get(1).asInstanceOf[String]),
-        joinPredicate.asInstanceOf[SpatialOperator],
+        joinPredicate,
         radius))
   }
 }
